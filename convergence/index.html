@@ -1,0 +1,659 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bayesian Updating and Convergence</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=Literata:opsz,wght@7..72,400;7..72,600&display=swap" rel="stylesheet">
+<style>
+:root {
+  /* Layout: tour + tests in a sticky left column (the controls); puzzle, people, charts and the
+     update arithmetic on the right (the effects). Light theme only, by choice.
+     Theory colors: blue, orange, aqua (validated as a three-color set). */
+  --bg: #f2f3f0;
+  --surface: #fdfdfb;
+  --surface-2: #eceee9;
+  --ink: #1c2024;
+  --muted: #5a626a;
+  --rule: #d5d9d3;
+  --accent: #2f5d50;
+  --on-accent: #ffffff;
+  --t0: #2a78d6;
+  --t1: #eb6834;
+  --t2: #1baf7a;
+  --font-ui: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-text: "Literata", Georgia, "Times New Roman", serif;
+  color-scheme: light;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--bg); color: var(--ink); font-family: var(--font-ui); font-size: 15px; line-height: 1.45; }
+button, input, select { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+header.top { max-width: 1440px; margin: 0 auto; padding: 20px 24px 12px; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 16px; }
+header.top h1 { margin: 0; font-size: 1.5rem; font-weight: 600; letter-spacing: -0.01em; }
+header.top .byline { color: var(--muted); font-size: 0.95rem; }
+
+.layout { max-width: 1440px; margin: 0 auto; padding: 0 24px 48px; display: grid; grid-template-columns: minmax(310px, 380px) minmax(0, 1fr); gap: 20px; align-items: start; }
+.side { position: sticky; top: 12px; display: flex; flex-direction: column; gap: 16px; max-height: calc(100vh - 24px); overflow-y: auto; padding-bottom: 4px; }
+.main { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.card { background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; padding: 14px 16px; }
+.card h2 { margin: 0; font-size: 1rem; font-weight: 600; }
+.lab { font-weight: 600; font-size: 0.78rem; color: var(--muted); letter-spacing: 0.04em; text-transform: uppercase; }
+.hint { color: var(--muted); font-size: 0.84rem; margin: 0; }
+.row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.grow { flex: 1; }
+
+.btn { border: 1px solid var(--rule); background: var(--surface-2); border-radius: 7px; padding: 5px 11px; cursor: pointer; font-size: 0.9rem; }
+.btn:hover:not(:disabled) { border-color: var(--muted); }
+.btn:disabled { opacity: 0.45; cursor: default; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.seg { display: inline-flex; border: 1px solid var(--rule); border-radius: 8px; overflow: hidden; background: var(--surface-2); flex-wrap: wrap; }
+.seg button { border: 0; background: transparent; padding: 5px 11px; cursor: pointer; font-weight: 500; color: var(--muted); font-size: 0.9rem; }
+.seg button + button { border-left: 1px solid var(--rule); }
+.seg button[aria-pressed="true"] { background: var(--surface); color: var(--ink); box-shadow: inset 0 -2px 0 var(--accent); }
+
+/* tour */
+.tour { display: flex; flex-direction: column; gap: 10px; border-top: 4px solid var(--accent); }
+.tour h3 { margin: 0; font-size: 1.05rem; font-weight: 600; text-wrap: balance; }
+.tour p { margin: 0; font-family: var(--font-text); font-size: 0.97rem; line-height: 1.58; }
+.tour-nav { display: flex; align-items: center; gap: 8px; }
+.dots { display: flex; gap: 5px; flex: 1; flex-wrap: wrap; }
+.dots button { width: 9px; height: 9px; border-radius: 50%; border: 0; padding: 0; background: var(--rule); cursor: pointer; }
+.dots button[aria-current="step"] { background: var(--accent); }
+
+/* tests */
+.tests { display: flex; flex-direction: column; gap: 10px; }
+.test { border: 1px solid var(--rule); border-radius: 8px; padding: 10px 12px; background: #fafbf8; display: flex; flex-direction: column; gap: 6px; }
+.test.flash { animation: flash 900ms ease-out; }
+@keyframes flash { from { background: #e3efe9; } to { background: #fafbf8; } }
+.test h3 { margin: 0; font-size: 0.95rem; font-weight: 600; }
+.test p { margin: 0; font-size: 0.88rem; color: var(--muted); }
+.test details summary { cursor: pointer; font-size: 0.86rem; font-weight: 500; color: var(--accent); }
+.test .last { font-size: 0.86rem; }
+.test .last b { font-weight: 600; }
+table.expect { width: 100%; border-collapse: collapse; font-size: 0.82rem; margin-top: 6px; font-variant-numeric: tabular-nums; }
+table.expect th, table.expect td { padding: 4px 4px; border-bottom: 1px solid var(--rule); text-align: right; vertical-align: top; }
+table.expect th { font-weight: 500; color: var(--muted); }
+table.expect td:first-child, table.expect th:first-child { text-align: left; }
+table.expect .why { display: block; color: var(--muted); font-size: 0.78rem; font-weight: 400; margin-top: 1px; }
+.note { font-size: 0.78rem; color: var(--muted); margin: 6px 0 0; }
+
+/* puzzle */
+.puzzle { display: grid; grid-template-columns: minmax(0, 1fr) 260px; gap: 14px 20px; }
+.story { margin: 4px 0 0; font-family: var(--font-text); font-size: 1.02rem; line-height: 1.55; max-width: 62ch; }
+.theories { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.theory { border: 1px solid var(--rule); border-left: 5px solid var(--c); border-radius: 8px; padding: 8px 10px; position: relative; }
+.theory b { display: block; font-size: 0.95rem; }
+.theory span { font-size: 0.86rem; color: var(--muted); }
+.theory .true { position: absolute; top: 6px; right: 8px; font-size: 0.72rem; font-weight: 600; background: var(--ink); color: var(--surface); border-radius: 999px; padding: 1px 8px; }
+.nature { border: 1px dashed var(--muted); border-radius: 8px; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; align-self: start; }
+.nature .secret { font-size: 0.92rem; }
+.nature select { border: 1px solid var(--rule); border-radius: 6px; padding: 3px 6px; background: var(--bg); font-size: 0.86rem; }
+
+/* people */
+.people { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.person { display: flex; flex-direction: column; gap: 6px; }
+.person-head { display: flex; align-items: baseline; justify-content: space-between; gap: 6px; }
+.person-head b { font-size: 1rem; }
+.pill { font-size: 0.74rem; background: var(--surface-2); border-radius: 999px; padding: 1px 8px; color: var(--muted); white-space: nowrap; }
+.person p { margin: 0; font-size: 0.84rem; color: var(--muted); min-height: 2.6em; }
+.stack { display: flex; height: 26px; border-radius: 5px; overflow: hidden; background: var(--surface-2); }
+.stack.thin { height: 8px; opacity: 0.55; }
+.stack div { height: 100%; transition: width 500ms ease; display: flex; align-items: center; justify-content: center; font-size: 0.74rem; font-weight: 600; color: #fff; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; }
+.stack div + div { box-shadow: inset 2px 0 0 var(--surface); }
+.nums { display: grid; grid-template-columns: repeat(3, auto); justify-content: space-between; font-size: 0.82rem; font-variant-numeric: tabular-nums; }
+.nums span { display: inline-flex; align-items: center; gap: 4px; }
+.sw { width: 10px; height: 10px; border-radius: 2px; display: inline-block; flex: none; }
+.mini-lab { font-size: 0.72rem; color: var(--muted); }
+.you-sliders { display: flex; flex-direction: column; gap: 2px; }
+.you-sliders label { display: grid; grid-template-columns: 62px 1fr 38px; align-items: center; gap: 6px; font-size: 0.8rem; }
+.you-sliders input { width: 100%; accent-color: var(--accent); }
+.you-sliders output { text-align: right; font-variant-numeric: tabular-nums; color: var(--muted); }
+@media (prefers-reduced-motion: reduce) { .stack div { transition: none; } .test.flash { animation: none; } }
+
+/* charts */
+.charts-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+.charts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.chart { min-width: 0; }
+.chart h3 { margin: 0 0 4px; font-size: 0.88rem; font-weight: 600; display: flex; align-items: center; gap: 6px; }
+.chart svg { width: 100%; height: 170px; display: block; overflow: visible; }
+.chart svg text { font-family: var(--font-ui); font-size: 10.5px; fill: var(--muted); }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 0.84rem; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+
+/* update + log */
+.lower { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 16px; }
+table.calc { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; font-size: 0.9rem; margin-top: 8px; }
+table.calc th, table.calc td { padding: 6px 8px; border-bottom: 1px solid var(--rule); text-align: right; }
+table.calc th { font-weight: 500; color: var(--muted); font-size: 0.82rem; }
+table.calc td:first-child, table.calc th:first-child { text-align: left; }
+table.calc tfoot td { border-bottom: 0; color: var(--muted); font-size: 0.84rem; }
+.calc-lead { margin: 6px 0 0; font-size: 0.9rem; }
+.log { list-style: none; margin: 8px 0 0; padding: 0; max-height: 260px; overflow-y: auto; font-size: 0.86rem; }
+.log li { padding: 5px 0; border-bottom: 1px solid var(--rule); display: grid; grid-template-columns: 34px 1fr; gap: 6px; }
+.log li span:first-child { color: var(--muted); font-variant-numeric: tabular-nums; }
+
+@media (max-width: 1180px) {
+  .people { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .charts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .lower { grid-template-columns: 1fr; }
+}
+@media (max-width: 820px) {
+  .layout { grid-template-columns: 1fr; padding: 0 14px 40px; }
+  header.top { padding: 16px 14px 10px; }
+  .side { position: static; max-height: none; overflow: visible; }
+  .puzzle { grid-template-columns: 1fr; }
+  .theories { grid-template-columns: 1fr; }
+}
+@media (max-width: 480px) {
+  .people, .charts { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+<header class="top">
+  <h1>Bayesian Updating and Convergence</h1>
+  <span class="byline">Sean Conte, PhD</span>
+</header>
+
+<main class="layout">
+  <aside class="side">
+    <section class="card tour" aria-label="Guided tour">
+      <span class="lab" id="tour-count"></span>
+      <h3 id="tour-title"></h3>
+      <p id="tour-text"></p>
+      <div class="tour-nav">
+        <div class="dots" id="tour-dots" aria-label="Tour steps"></div>
+        <button type="button" class="btn" id="tour-back">Back</button>
+        <button type="button" class="btn primary" id="tour-next">Next</button>
+      </div>
+    </section>
+
+    <section class="card" aria-label="Choose a puzzle">
+      <span class="lab" id="lab-puz">Puzzle</span>
+      <div class="seg" role="group" aria-labelledby="lab-puz" id="puz-seg" style="margin-top:6px"></div>
+    </section>
+
+    <section class="card" aria-labelledby="h-tests">
+      <h2 id="h-tests">Tests you can run</h2>
+      <p class="hint">Every test can be repeated. Results come from the real cause, which is hidden.</p>
+      <div class="tests" id="tests" style="margin-top:10px"></div>
+      <div class="row" style="margin-top:12px">
+        <button type="button" class="btn" id="run10">Run 10 random tests</button>
+        <button type="button" class="btn" id="restart">Start over</button>
+      </div>
+    </section>
+  </aside>
+
+  <section class="main">
+    <section class="card puzzle" aria-labelledby="h-puzzle">
+      <div>
+        <h2 id="h-puzzle"></h2>
+        <p class="story" id="story"></p>
+      </div>
+      <div class="nature" aria-label="The real cause">
+        <span class="lab">The real cause</span>
+        <span class="secret" id="secret"></span>
+        <div class="row">
+          <button type="button" class="btn" id="reveal">Reveal it</button>
+          <label class="hint" for="truth-pick">Set it:</label>
+          <select id="truth-pick" aria-label="Choose the real cause (starts over)"></select>
+        </div>
+      </div>
+      <div class="theories" id="theories"></div>
+    </section>
+
+    <section class="people" id="people" aria-label="People and their current beliefs"></section>
+
+    <section class="card" aria-labelledby="h-charts">
+      <div class="charts-head">
+        <h2 id="h-charts">Belief over time</h2>
+        <div class="legend" id="legend"></div>
+      </div>
+      <div class="charts" id="charts"></div>
+    </section>
+
+    <div class="lower">
+      <section class="card" aria-labelledby="h-calc">
+        <div class="row">
+          <h2 id="h-calc" class="grow">Last update, step by step</h2>
+          <div class="seg" role="group" aria-label="Whose update to show" id="who-seg"></div>
+        </div>
+        <div id="calc"></div>
+      </section>
+      <section class="card" aria-labelledby="h-log">
+        <h2 id="h-log">Results so far</h2>
+        <ol class="log" id="log" reversed></ol>
+      </section>
+    </div>
+  </section>
+</main>
+
+<script>
+(() => {
+  "use strict";
+
+  // ---------------- Puzzles ----------------
+  // Likelihoods are listed per theory, one number per outcome, in outcome order.
+  const PUZZLES = {
+    garden: {
+      name: "Tomato garden",
+      title: "Why are the east-side tomatoes doing better?",
+      story: "Tomatoes on the east side of the garden are tall and full. On the west side they’re small. Same seeds, planted the same day. What’s making the difference?",
+      theories: [
+        { name: "Sunlight", claim: "The east side gets more direct sun." },
+        { name: "Water", claim: "The sprinkler soaks the east side better." },
+        { name: "Soil", claim: "The east side has richer soil." }
+      ],
+      people: [
+        { name: "Ava", value: "Simplicity", why: "Plants need sun. One plain cause is the simplest story.", prior: [0.6, 0.25, 0.15] },
+        { name: "Ben", value: "Experience", why: "Every time his own plants struggled, it was the watering.", prior: [0.2, 0.6, 0.2] },
+        { name: "Cara", value: "Novelty", why: "Soil would be the overlooked answer, and the more interesting one.", prior: [0.15, 0.2, 0.65] }
+      ],
+      tests: [
+        { name: "Squeeze the soil", how: "The morning after watering, squeeze a handful of soil from each side.",
+          outcomes: ["East soil is wetter", "About the same"],
+          like: [[0.2, 0.8], [0.85, 0.15], [0.5, 0.5]],
+          why: ["More sun dries soil out, so the east side shouldn’t be wetter.", "If the sprinkler favors the east side, its soil should be wetter.", "Rich soil holds water a little better, so it could go either way."] },
+        { name: "Swap-the-soil pots", how: "Fill one pot with soil from each side, plant a seedling in each, and set both pots in the same spot.",
+          outcomes: ["East-soil seedling grows faster", "No clear difference"],
+          like: [[0.2, 0.8], [0.2, 0.8], [0.85, 0.15]],
+          why: ["Both pots get the same light, so they should grow about the same.", "Both pots get the same water, so they should grow about the same.", "Same sun, same water, so only the soil differs. Richer soil should win."] },
+        { name: "Shade cloth", how: "Cover a few east-side plants with shade cloth for a week.",
+          outcomes: ["Covered plants slow down", "No change"],
+          like: [[0.85, 0.15], [0.25, 0.75], [0.25, 0.75]],
+          why: ["Take away the extra sun and the advantage should disappear.", "They still get the same water, so they should keep growing.", "They’re still in the same soil, so they should keep growing."] },
+        { name: "Count the bees", how: "Count the bees visiting each side for ten minutes.",
+          outcomes: ["More bees on the east side", "About the same"],
+          like: [[0.6, 0.4], [0.6, 0.4], [0.6, 0.4]],
+          why: ["Healthier plants have more flowers, so expect more bees on the east side.", "Same here: more flowers, more bees.", "Same here: more flowers, more bees."] }
+      ]
+    },
+    phone: {
+      name: "Phone battery",
+      title: "Why does the phone die by mid-afternoon?",
+      story: "Your phone used to last all day. Now it’s nearly dead by mid-afternoon. Nothing obvious changed. What’s draining it?",
+      theories: [
+        { name: "Old battery", claim: "The battery has worn out with age." },
+        { name: "Rogue app", claim: "An app keeps running in the background." },
+        { name: "Weak signal", claim: "Poor reception makes the phone keep searching for a signal." }
+      ],
+      people: [
+        { name: "Ava", value: "Simplicity", why: "Batteries wear out. That’s the plain explanation.", prior: [0.6, 0.25, 0.15] },
+        { name: "Ben", value: "Experience", why: "The last time this happened to him, it was an app.", prior: [0.2, 0.65, 0.15] },
+        { name: "Cara", value: "Novelty", why: "Nobody thinks about signal strength. She’d bet on that.", prior: [0.15, 0.2, 0.65] }
+      ],
+      tests: [
+        { name: "Check battery health", how: "Open the battery settings and look at the maximum capacity.",
+          outcomes: ["Below 80%", "Still healthy"],
+          like: [[0.85, 0.15], [0.2, 0.8], [0.2, 0.8]],
+          why: ["A worn-out battery shows a low maximum capacity.", "An app drains power but doesn’t damage the battery.", "Searching for a signal doesn’t wear the battery down either."] },
+        { name: "Airplane-mode afternoon", how: "Keep the phone in airplane mode, wifi off too, for one afternoon.",
+          outcomes: ["Lasts much longer", "Still drains fast"],
+          like: [[0.15, 0.85], [0.45, 0.55], [0.9, 0.1]],
+          why: ["A worn battery is just as weak offline.", "Some apps keep running offline, so it could go either way.", "No radio means no searching, so the drain should stop."] },
+        { name: "Read the usage list", how: "Check which apps used the most battery today.",
+          outcomes: ["One app far above the rest", "Nothing stands out"],
+          like: [[0.2, 0.8], [0.85, 0.15], [0.3, 0.7]],
+          why: ["Usage looks normal; there’s just less battery to use.", "A rogue app should sit at the top of the list.", "Searching shows up as system use, though it can muddy the list."] },
+        { name: "Try a new case", how: "Put the phone in a different case for a day.",
+          outcomes: ["Lasts a bit longer", "No change"],
+          like: [[0.15, 0.85], [0.15, 0.85], [0.15, 0.85]],
+          why: ["A case has nothing to do with the battery’s age. Any difference is chance.", "A case has nothing to do with apps. Any difference is chance.", "A case doesn’t change the signal. Any difference is chance."] }
+      ]
+    },
+    bread: {
+      name: "Flat bread",
+      title: "Why didn’t the bread rise?",
+      story: "You followed the recipe, but the dough barely rose. Something went wrong with the yeast, but what?",
+      theories: [
+        { name: "Old yeast", claim: "The yeast packet was old and mostly dead." },
+        { name: "Hot water", claim: "The water was hot enough to kill the yeast." },
+        { name: "Cold kitchen", claim: "The kitchen was too cold for the yeast to work." }
+      ],
+      people: [
+        { name: "Ava", value: "Simplicity", why: "Old yeast is the simplest explanation.", prior: [0.6, 0.2, 0.2] },
+        { name: "Ben", value: "Experience", why: "He has scalded yeast with hot tap water before.", prior: [0.2, 0.6, 0.2] },
+        { name: "Cara", value: "Novelty", why: "Room temperature gets overlooked. She suspects the kitchen.", prior: [0.15, 0.2, 0.65] }
+      ],
+      tests: [
+        { name: "Proof the yeast", how: "Stir yeast from the same packet into lukewarm water with a pinch of sugar. Wait ten minutes.",
+          outcomes: ["It foams", "No foam"],
+          like: [[0.05, 0.95], [0.9, 0.1], [0.9, 0.1]],
+          why: ["Dead yeast can’t foam, even in perfect water.", "This water is lukewarm, so healthy yeast should foam.", "A cup of lukewarm water is warm enough, so it should foam."] },
+        { name: "Measure the tap", how: "Run the tap the way you did for the dough and check it with a thermometer.",
+          outcomes: ["Above 130°F", "Warm, not hot"],
+          like: [[0.2, 0.8], [0.85, 0.15], [0.2, 0.8]],
+          why: ["The yeast was the problem, not the water, so it probably isn’t that hot.", "If the water killed the yeast, the tap should run very hot.", "The kitchen is the problem, not the water, so it probably isn’t that hot."] },
+        { name: "Rise in a warm spot", how: "Make a small test dough the same way and let it rise in an oven with only the light on.",
+          outcomes: ["It rises", "It doesn’t"],
+          like: [[0.05, 0.95], [0.1, 0.9], [0.85, 0.15]],
+          why: ["Dead yeast won’t rise anywhere.", "The hot water kills the yeast again, so warmth won’t help.", "If cold was the problem, warmth should fix it."] },
+        { name: "Weigh the flour", how: "Check whether you measured the flour correctly.",
+          outcomes: ["Measured right", "A little off"],
+          like: [[0.7, 0.3], [0.7, 0.3], [0.7, 0.3]],
+          why: ["None of the three theories is about flour.", "None of the three theories is about flour.", "None of the three theories is about flour."] }
+      ]
+    }
+  };
+  const PKEYS = Object.keys(PUZZLES);
+  const TCOL = ["#2a78d6", "#eb6834", "#1baf7a"];
+  const TTEXT = ["#ffffff", "#1c2024", "#1c2024"];
+  const DASH = ["", "6 4", "1.5 3.5", "9 3 2 3"];
+
+  // ---------------- State ----------------
+  const st = { puz: "garden", truth: 0, truthMode: "random", revealed: false, history: [], you: [34, 33, 33], who: 0, open: new Set(), tour: 0 };
+  const P = () => PUZZLES[st.puz];
+
+  function pickTruth() {
+    st.truth = st.truthMode === "random" ? Math.floor(Math.random() * 3) : Number(st.truthMode);
+  }
+  function startOver(keepTruthMode = true) {
+    st.history = []; st.revealed = false;
+    if (!keepTruthMode) st.truthMode = "random";
+    pickTruth();
+  }
+
+  // ---------------- Math ----------------
+  function sampleOutcome(test) {
+    const probs = test.like[st.truth], r = Math.random();
+    let acc = 0;
+    for (let o = 0; o < probs.length; o++) { acc += probs[o]; if (r < acc) return o; }
+    return probs.length - 1;
+  }
+  // cumulative log-likelihoods after each step: logL[k][h], k = 0..T
+  function logLs() {
+    const out = [[0, 0, 0]];
+    for (const { t, o } of st.history) {
+      const prev = out[out.length - 1], like = P().tests[t].like;
+      out.push(prev.map((v, h) => v + Math.log(Math.max(1e-300, like[h][o]))));
+    }
+    return out;
+  }
+  function posterior(prior, logL) {
+    const mx = Math.max(...logL.filter((_, h) => prior[h] > 0), -Infinity);
+    const w = prior.map((p, h) => p > 0 ? p * Math.exp(logL[h] - mx) : 0);
+    const s = w.reduce((a, b) => a + b, 0);
+    return s > 0 ? w.map(x => x / s) : prior.slice();
+  }
+  function youPrior() {
+    const s = st.you.reduce((a, b) => a + b, 0);
+    return s > 0 ? st.you.map(x => x / s) : [1 / 3, 1 / 3, 1 / 3];
+  }
+  function everyone() {
+    return [...P().people.map(p => ({ name: p.name, value: p.value, why: p.why, prior: p.prior })),
+      { name: "You", value: "", why: "Set your own starting point. Changing it replays the evidence so far.", prior: youPrior(), you: true }];
+  }
+  const pct = x => (x * 100 < 0.05 && x > 0 ? "<0.1" : (x * 100).toFixed(x * 100 >= 10 || x === 0 ? 0 : 1)) + "%";
+
+  // ---------------- Rendering ----------------
+  function renderPuzzle() {
+    const pz = P();
+    document.getElementById("h-puzzle").textContent = pz.title;
+    document.getElementById("story").textContent = pz.story;
+    document.getElementById("theories").innerHTML = pz.theories.map((t, h) =>
+      `<div class="theory" style="--c:${TCOL[h]}"><b>${t.name}</b><span>${t.claim}</span>${st.revealed && h === st.truth ? '<em class="true">Real cause</em>' : ""}</div>`).join("");
+    document.getElementById("secret").textContent = st.revealed
+      ? `It was ${pz.theories[st.truth].name.toLowerCase()}.`
+      : (st.truthMode === "random" ? "Picked at random and hidden until you reveal it." : "Set by you. It’s hidden from the people below.");
+    document.getElementById("reveal").textContent = st.revealed ? "Hide it" : "Reveal it";
+    const sel = document.getElementById("truth-pick");
+    sel.innerHTML = `<option value="random">At random</option>` + pz.theories.map((t, h) => `<option value="${h}">${t.name}</option>`).join("");
+    sel.value = st.truthMode;
+    document.querySelectorAll("#puz-seg button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.puz === st.puz)));
+  }
+
+  function stackHtml(p, thin) {
+    return `<div class="stack${thin ? " thin" : ""}" role="img" aria-label="${P().theories.map((t, h) => `${t.name} ${pct(p[h])}`).join(", ")}">`
+      + p.map((x, h) => `<div style="width:${(x * 100).toFixed(3)}%;background:${TCOL[h]};color:${TTEXT[h]}" title="${P().theories[h].name}: ${pct(x)}">${!thin && x >= 0.14 ? pct(x) : ""}</div>`).join("")
+      + `</div>`;
+  }
+  function renderPeople(L) {
+    const last = L[L.length - 1], ppl = everyone();
+    const el = document.getElementById("people");
+    const existing = el.querySelectorAll(".person");
+    if (existing.length !== ppl.length || el.dataset.puz !== st.puz) {
+      el.dataset.puz = st.puz;
+      el.innerHTML = ppl.map((p, i) => `
+        <div class="card person" data-i="${i}">
+          <div class="person-head"><b>${p.name}</b><span class="pill">${p.you ? "Your choice" : "Values " + p.value.toLowerCase()}</span></div>
+          <p>${p.why}</p>
+          <span class="mini-lab">Now</span>
+          <div class="now"></div>
+          <span class="mini-lab">Started at</span>
+          <div class="start"></div>
+          <div class="nums"></div>
+          ${p.you ? `<div class="you-sliders">${P().theories.map((t, h) => `<label><span>${t.name}</span><input type="range" min="0" max="100" step="1" data-h="${h}" aria-label="Your starting weight for ${t.name}"><output></output></label>`).join("")}</div>` : ""}
+        </div>`).join("");
+      el.querySelectorAll(".you-sliders input").forEach(inp => inp.addEventListener("input", () => { st.you[+inp.dataset.h] = +inp.value; render(); }));
+      // build stacks once so widths can animate
+      el.querySelectorAll(".person").forEach((card, i) => {
+        card.querySelector(".now").innerHTML = stackHtml(ppl[i].prior, false);
+        card.querySelector(".start").innerHTML = stackHtml(ppl[i].prior, true);
+      });
+    }
+    el.querySelectorAll(".person").forEach((card, i) => {
+      const post = posterior(ppl[i].prior, last);
+      updateStack(card.querySelector(".now .stack"), post, false);
+      updateStack(card.querySelector(".start .stack"), ppl[i].prior, true);
+      card.querySelector(".nums").innerHTML = post.map((x, h) => `<span><i class="sw" style="background:${TCOL[h]}"></i>${P().theories[h].name} ${pct(x)}</span>`).join("");
+      if (ppl[i].you) card.querySelectorAll(".you-sliders input").forEach((inp, h) => {
+        if (document.activeElement !== inp) inp.value = st.you[h];
+        inp.nextElementSibling.textContent = pct(ppl[i].prior[h]);
+      });
+    });
+  }
+  function updateStack(stack, p, thin) {
+    stack.querySelectorAll("div").forEach((seg, h) => {
+      seg.style.width = (p[h] * 100).toFixed(3) + "%";
+      seg.textContent = !thin && p[h] >= 0.14 ? pct(p[h]) : "";
+      seg.title = `${P().theories[h].name}: ${pct(p[h])}`;
+    });
+    stack.setAttribute("aria-label", P().theories.map((t, h) => `${t.name} ${pct(p[h])}`).join(", "));
+  }
+
+  function renderCharts(L) {
+    const ppl = everyone();
+    const series = ppl.map(p => L.map(l => posterior(p.prior, l)));
+    const T = L.length - 1, xmax = Math.max(10, T);
+    const gap = L.map((_, k) => {
+      let g = 0;
+      for (let a = 0; a < ppl.length; a++) for (let b = a + 1; b < ppl.length; b++)
+        for (let h = 0; h < 3; h++) g = Math.max(g, Math.abs(series[a][k][h] - series[b][k][h]));
+      return g;
+    });
+    const panels = P().theories.map((t, h) => ({ title: t.name, color: TCOL[h], lines: series.map(s => s.map(v => v[h])), isTrue: st.revealed && h === st.truth }));
+    panels.push({ title: "Biggest disagreement", color: null, lines: [gap], gap: true });
+    const box = document.getElementById("charts");
+    if (box.children.length !== panels.length) box.innerHTML = panels.map(() => `<div class="chart"></div>`).join("");
+    const W = Math.max(180, Math.round(box.children[0].clientWidth || 260)), H = 170, ml = 30, mr = 34, mt = 8, mb = 22;
+    const X = k => ml + (k / xmax) * (W - ml - mr), Y = v => mt + (1 - v) * (H - mt - mb);
+    panels.map((pn, pi) => {
+      let svg = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${pn.title} over ${T} tests">`;
+      for (const v of [0, 0.5, 1]) svg += `<line x1="${ml}" x2="${W - mr}" y1="${Y(v)}" y2="${Y(v)}" stroke="#d5d9d3" stroke-width="1"/><text x="${ml - 5}" y="${Y(v) + 3.5}" text-anchor="end">${v * 100}${pn.gap ? "" : "%"}</text>`;
+      svg += `<text x="${ml}" y="${H - 6}">0</text><text x="${W - mr}" y="${H - 6}" text-anchor="end">${xmax} tests</text>`;
+      pn.lines.forEach((ln, i) => {
+        const pts = ln.map((v, k) => `${X(k).toFixed(1)},${Y(v).toFixed(1)}`).join(" ");
+        const stroke = pn.gap ? "#1c2024" : (i === 3 ? "#2f5d50" : "#1c2024");
+        svg += `<polyline points="${pts}" fill="none" stroke="${stroke}" stroke-width="${i === 3 ? 2.25 : 1.75}" stroke-dasharray="${pn.gap ? "" : DASH[i]}" stroke-linejoin="round" stroke-linecap="round" opacity="${pn.gap ? 0.9 : 0.85}"/>`;
+        const lv = ln[ln.length - 1];
+        svg += `<circle cx="${X(T)}" cy="${Y(lv)}" r="2.6" fill="${stroke}"/>`;
+      });
+      if (!pn.gap) {
+        // end labels, nudged apart
+        const ends = pn.lines.map((ln, i) => ({ i, y: Y(ln[ln.length - 1]) })).sort((a, b) => a.y - b.y);
+        for (let k = 1; k < ends.length; k++) if (ends[k].y - ends[k - 1].y < 11) ends[k].y = ends[k - 1].y + 11;
+        const over = ends.length ? ends[ends.length - 1].y - (H - mb) : 0;
+        if (over > 0) ends.forEach(e => { e.y -= over; });
+        ends.forEach(e => { svg += `<text x="${X(T) + 5}" y="${e.y + 3.5}" style="fill:#1c2024">${ppl[e.i].name}</text>`; });
+      } else {
+        svg += `<text x="${X(T) + 5}" y="${Y(gap[T]) + 3.5}" style="fill:#1c2024;font-weight:600">${Math.round(gap[T] * 100)}</text>`;
+      }
+      svg += `</svg>`;
+      const head = pn.gap
+        ? `<h3>${pn.title}<span class="hint" style="font-weight:400">(points)</span></h3>`
+        : `<h3><i class="sw" style="background:${pn.color}"></i>${pn.title}${pn.isTrue ? ' <span class="pill">Real cause</span>' : ""}</h3>`;
+      return head + svg;
+    }).forEach((html, i) => { box.children[i].innerHTML = html; });
+    document.getElementById("legend").innerHTML = ppl.map((p, i) =>
+      `<span><svg width="28" height="8" aria-hidden="true"><line x1="1" x2="27" y1="4" y2="4" stroke="${i === 3 ? "#2f5d50" : "#1c2024"}" stroke-width="2" stroke-dasharray="${DASH[i]}"/></svg>${p.name}</span>`).join("");
+  }
+
+  function renderTests() {
+    const pz = P(), box = document.getElementById("tests");
+    if (box.dataset.puz !== st.puz) {
+      box.dataset.puz = st.puz;
+      box.innerHTML = pz.tests.map((t, i) => `
+        <div class="test" data-i="${i}">
+          <h3>${t.name}</h3>
+          <p>${t.how}</p>
+          <details ${st.open.has(i) ? "open" : ""}><summary>What each theory expects</summary>
+            <table class="expect"><thead><tr><th>If the cause is…</th>${t.outcomes.map(o => `<th>${o}</th>`).join("")}</tr></thead>
+            <tbody>${pz.theories.map((th, h) => `<tr><td><i class="sw" style="background:${TCOL[h]}"></i> ${th.name}<span class="why">${t.why[h]}</span></td>${t.like[h].map(v => `<td>${Math.round(v * 100)}%</td>`).join("")}</tr>`).join("")}</tbody></table>
+            <p class="note">These numbers say how strongly each theory expects each result. They are not how likely each theory is.</p>
+          </details>
+          <div class="row"><button type="button" class="btn primary" data-run="1">Run it</button><button type="button" class="btn" data-run="5">Run 5 times</button><span class="last grow"></span></div>
+        </div>`).join("");
+      box.querySelectorAll(".test").forEach(card => {
+        const i = +card.dataset.i;
+        card.querySelectorAll("button[data-run]").forEach(b => b.addEventListener("click", () => { for (let k = 0; k < +b.dataset.run; k++) runTest(i); render(); flash(i); }));
+        card.querySelector("details").addEventListener("toggle", e => { if (e.target.open) st.open.add(i); else st.open.delete(i); });
+      });
+    }
+    box.querySelectorAll(".test").forEach(card => {
+      const i = +card.dataset.i;
+      let lastO = null, count = 0;
+      for (const hst of st.history) if (hst.t === i) { lastO = hst.o; count++; }
+      card.querySelector(".last").innerHTML = lastO === null ? "" : `Last: <b>${pz.tests[i].outcomes[lastO]}</b>${count > 1 ? ` (run ${count}×)` : ""}`;
+      card.querySelector("details").open = st.open.has(i);
+    });
+  }
+  function flash(i) {
+    const card = document.querySelector(`.test[data-i="${i}"]`);
+    if (!card) return;
+    card.classList.remove("flash"); void card.offsetWidth; card.classList.add("flash");
+  }
+
+  function renderCalc(L) {
+    const ppl = everyone(), pz = P();
+    const seg = document.getElementById("who-seg");
+    if (seg.dataset.puz !== st.puz) {
+      seg.dataset.puz = st.puz;
+      seg.innerHTML = ppl.map((p, i) => `<button type="button" data-i="${i}">${p.name}</button>`).join("");
+      seg.querySelectorAll("button").forEach(b => b.addEventListener("click", () => { st.who = +b.dataset.i; render(); }));
+    }
+    seg.querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", String(+b.dataset.i === st.who)));
+    const box = document.getElementById("calc");
+    if (!st.history.length) {
+      box.innerHTML = `<p class="calc-lead">Run a test to see the arithmetic. Every update works the same way: multiply each belief by how strongly that theory expected the result, then rescale so the beliefs add up to 100%.</p>`;
+      return;
+    }
+    const T = st.history.length, { t, o } = st.history[T - 1], test = pz.tests[t];
+    const p = ppl[st.who], before = posterior(p.prior, L[T - 1]), after = posterior(p.prior, L[T]);
+    const prod = before.map((b, h) => b * test.like[h][o]), tot = prod.reduce((a, b) => a + b, 0);
+    const dec = x => x === 0 ? "0" : (x >= 0.001 ? x.toFixed(3) : String(parseFloat(x.toPrecision(2))));
+    box.innerHTML = `<p class="calc-lead">Test ${T}: <b>${test.name}</b> came out <b>${test.outcomes[o]}</b>. Here is ${p.name === "You" ? "your" : p.name + "’s"} update.</p>
+      <table class="calc"><thead><tr><th>Theory</th><th>Before</th><th>× Expected this result</th><th>= Product</th><th>÷ ${dec(tot)} = After</th></tr></thead>
+      <tbody>${pz.theories.map((th, h) => `<tr><td><i class="sw" style="background:${TCOL[h]}"></i> ${th.name}</td><td>${dec(before[h])}</td><td>${test.like[h][o].toFixed(2)}</td><td>${dec(prod[h])}</td><td><b>${pct(after[h])}</b></td></tr>`).join("")}</tbody>
+      <tfoot><tr><td colspan="5">The products add up to ${dec(tot)}. Dividing by that total rescales them so they add up to 100%.</td></tr></tfoot></table>`;
+  }
+
+  function renderLog() {
+    const pz = P();
+    document.getElementById("log").innerHTML = st.history.length
+      ? st.history.map((hst, k) => `<li><span>${k + 1}.</span><span>${pz.tests[hst.t].name}: <b>${pz.tests[hst.t].outcomes[hst.o]}</b></span></li>`).reverse().join("")
+      : `<li><span></span><span class="hint">No tests yet.</span></li>`;
+  }
+
+  function render() {
+    const L = logLs();
+    renderPuzzle();
+    renderTests();
+    renderPeople(L);
+    renderCharts(L);
+    renderCalc(L);
+    renderLog();
+    renderTour();
+  }
+
+  // ---------------- Actions ----------------
+  function runTest(i) { st.history.push({ t: i, o: sampleOutcome(P().tests[i]) }); }
+  function runRandom(n, diagnosticOnly = false) {
+    const tests = P().tests;
+    const pool = tests.map((t, i) => i).filter(i => !diagnosticOnly || new Set(tests[i].like.map(r => r.join())).size > 1);
+    for (let k = 0; k < n; k++) runTest(pool[Math.floor(Math.random() * pool.length)]);
+  }
+  document.getElementById("run10").addEventListener("click", () => { runRandom(10); render(); });
+  document.getElementById("restart").addEventListener("click", () => { startOver(); render(); });
+  document.getElementById("reveal").addEventListener("click", () => { st.revealed = !st.revealed; render(); });
+  document.getElementById("truth-pick").addEventListener("change", e => { st.truthMode = e.target.value; startOver(); render(); });
+  const puzSeg = document.getElementById("puz-seg");
+  puzSeg.innerHTML = PKEYS.map(k => `<button type="button" data-puz="${k}">${PUZZLES[k].name}</button>`).join("");
+  puzSeg.querySelectorAll("button").forEach(b => b.addEventListener("click", () => { setPuzzle(b.dataset.puz); render(); }));
+  function setPuzzle(k) {
+    st.puz = k; st.open = new Set(); st.who = 0; st.you = [34, 33, 33];
+    startOver(false);
+  }
+
+  // ---------------- Tour ----------------
+  const TOUR = [
+    { title: "A garden puzzle", apply: () => { setPuzzle("garden"); },
+      text: () => `${PUZZLES.garden.story} Three explanations are on the table. Exactly one is the real cause, and the app has picked it in secret.` },
+    { title: "Three people, three hunches", apply: () => {},
+      text: () => "Ava, Ben, and Cara start out believing different things because they value different things in an explanation. None of these starting points is unreasonable. They are just where each person begins. Each one is called a prior." },
+    { title: "What does each theory expect?", apply: () => { st.open = new Set([0]); },
+      text: () => "Before running a test, ask what each theory predicts. Open the soil-squeeze test on the left. If the sprinkler is the cause, the east soil should usually be wetter. If sun is the cause, it usually shouldn’t be. These numbers describe the test, not who is right." },
+    { title: "Run it and update", apply: () => { runTest(0); },
+      text: () => "Everyone sees the same result and updates the same way: multiply each belief by how strongly that theory expected the result, then rescale so the beliefs add up to 100%. The step-by-step panel shows the arithmetic for each person." },
+    { title: "A test that can’t decide", apply: () => { runTest(3); },
+      text: () => "Now count the bees. Every theory expects the same thing here, so nobody’s beliefs move at all. A test only teaches you something when the theories disagree about what will happen." },
+    { title: "Keep testing", apply: () => { runRandom(8, true); },
+      text: () => "Eight more tests. Each person moves from a different starting point at a different pace, but they all move the same direction. In each chart, watch the lines pull together. The last chart tracks the biggest disagreement between any two people." },
+    { title: "Where they end up", apply: () => { let k = 0; while (k < 40) { runRandom(1, true); k++; if (currentGap() < 0.05 && st.history.length >= 15) break; } },
+      text: () => `After ${st.history.length} tests, the biggest disagreement is down to ${Math.round(currentGap() * 100)} points. With enough shared evidence, where people started stops mattering much. Reveal the real cause to see where they ended up.` },
+    { title: "The iron rule", apply: () => {},
+      text: () => "The philosopher Michael Strevens calls this kind of discipline the iron rule of explanation. Scientists may start from any hunches they like, but in public they settle disputes only by empirical testing. Shared evidence is what brings different starting points together." },
+    { title: "Be stubborn", apply: () => { startOver(); st.you = [50, 50, 50]; st.you[st.truth] = 0; runRandom(12, true); },
+      text: () => "Now you start out giving one theory exactly 0%. Watch your line (the green one) in that theory’s chart. No amount of evidence can lift a zero, because zero times anything is still zero. Starting points of exactly 0% or 100% never wash out." },
+    { title: "Your turn", apply: () => {},
+      text: () => "Set your own starting point, try the other puzzles, or pick the real cause yourself and see which tests find it fastest." }
+  ];
+  function currentGap() {
+    const L = logLs(), last = L[L.length - 1], ppl = everyone(), ps = ppl.map(p => posterior(p.prior, last));
+    let g = 0;
+    for (let a = 0; a < ps.length; a++) for (let b = a + 1; b < ps.length; b++) for (let h = 0; h < 3; h++) g = Math.max(g, Math.abs(ps[a][h] - ps[b][h]));
+    return g;
+  }
+  const dots = document.getElementById("tour-dots");
+  dots.innerHTML = TOUR.map((t, i) => `<button type="button" aria-label="Step ${i + 1}: ${t.title}"></button>`).join("");
+  dots.querySelectorAll("button").forEach((b, i) => b.addEventListener("click", () => goTour(i)));
+  document.getElementById("tour-back").addEventListener("click", () => goTour(Math.max(0, st.tour - 1)));
+  document.getElementById("tour-next").addEventListener("click", () => goTour(Math.min(TOUR.length - 1, st.tour + 1)));
+  function goTour(i) {
+    // replay from the start so each step lands in the same place whichever way you arrive
+    if (i < st.tour || i - st.tour > 1) { TOUR[0].apply(); for (let k = 1; k <= i; k++) TOUR[k].apply(); }
+    else TOUR[i].apply();
+    st.tour = i; render();
+  }
+  function renderTour() {
+    const t = TOUR[st.tour];
+    document.getElementById("tour-count").textContent = `Step ${st.tour + 1} of ${TOUR.length}`;
+    document.getElementById("tour-title").textContent = t.title;
+    document.getElementById("tour-text").textContent = t.text();
+    dots.querySelectorAll("button").forEach((b, i) => { if (i === st.tour) b.setAttribute("aria-current", "step"); else b.removeAttribute("aria-current"); });
+    document.getElementById("tour-back").disabled = st.tour === 0;
+    document.getElementById("tour-next").disabled = st.tour === TOUR.length - 1;
+  }
+
+  // ---------------- Start ----------------
+  TOUR[0].apply();
+  render();
+  window.addEventListener("resize", () => renderCharts(logLs()));
+})();
+</script>
+</body>
+</html>
